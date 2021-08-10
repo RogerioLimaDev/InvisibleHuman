@@ -1,12 +1,15 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Collections.Generic;
+
 using OpenCvSharp;
+using OpenCvSharp.Util;
+
 using Unity.Collections;
 using Unity.Collections.LowLevel.Unsafe;
 using UnityEngine;
 using UnityEngine.UI;
-
 using UnityEngine.XR.ARFoundation;
 using UnityEngine.XR.ARSubsystems;
 
@@ -73,6 +76,7 @@ namespace InvisibleHuman.CaptureFunction
             RenderTexture.active = HumanStencil_RT;
             Stencil_Texture.ReadPixels(new UnityEngine.Rect(0, 0, Stencil_Texture.width, Stencil_Texture.height), 0, 0);
             Stencil_Texture.Apply();
+
             RenderTexture.active = currentRT;
             #endregion
         }
@@ -89,10 +93,12 @@ namespace InvisibleHuman.CaptureFunction
             Texture2D stencilViewTexture = new Texture2D(width,height);
             Texture2D rgbViewTexture = new Texture2D(width, height);
             Texture2D inpaintViewTexture = new Texture2D(width, height);
+            Texture2D floodFillTexture = new Texture2D(width, height);
 
             HumanStencil_Image.texture = stencilViewTexture;
             RGB_Image.texture = rgbViewTexture;
-            Inpaint_Image.texture = inpaintViewTexture;
+            // Inpaint_Image.texture = inpaintViewTexture;
+            Inpaint_Image.texture = floodFillTexture;
 
             while (!cancelToken.IsCancellationRequested)
             {
@@ -104,11 +110,48 @@ namespace InvisibleHuman.CaptureFunction
                 using (Mat rgbMat = OpenCvSharp.Unity.TextureToMat(RGB_Texture))
                 using (Mat inpaintMat = new Mat())
                 {
+
                     #region stencil texture
                     Cv2.CvtColor(stencilMat, stencilMat, ColorConversionCodes.BGR2GRAY);
-                    Cv2.Dilate(stencilMat, stencilMat, InputArray.Create(dilateArray));
+                    // Cv2.Dilate(stencilMat, stencilMat, InputArray.Create(dilateArray));
                     Cv2.Resize(stencilMat, stencilMat, new OpenCvSharp.Size(width, height));
                     stencilViewTexture = OpenCvSharp.Unity.MatToTexture(stencilMat, stencilViewTexture);
+                    #endregion
+
+                    #region floodfill texture
+                    Mat baseMat = OpenCvSharp.Unity.TextureToMat(Stencil_Texture);
+                    Cv2.CvtColor(baseMat,baseMat, ColorConversionCodes.BGR2GRAY);
+
+                    Point[][] contours;
+			        HierarchyIndex[] hierarchy;
+			        Cv2.FindContours (baseMat, out contours, out hierarchy, RetrievalModes.List, ContourApproximationModes.ApproxSimple, null);
+                    
+                    Cv2.Dilate(baseMat, baseMat, InputArray.Create(dilateArray));
+                    Cv2.GaussianBlur (baseMat, baseMat, new Size(5,5),0);
+                    Cv2.Threshold(baseMat, baseMat, 220,255,ThresholdTypes.Binary);
+
+                    UnityEngine.Debug.Log("Chegou até aqui baseMat ROWS---->:"+baseMat.Rows);
+                    UnityEngine.Debug.Log("Chegou até aqui baseMat COLS--->:"+baseMat.Cols);
+
+                    IntPtr m_rows= ((IntPtr)baseMat.Size().Height)+2;
+                    IntPtr m_cols = ((IntPtr)baseMat.Size().Width)+2;
+
+                    Mat mask = new Mat((int)m_cols, (int)m_rows, MatType.CV_32F);
+
+                    // mask.rows == size.height+2 && mask.cols == size.width+2
+                    // Cv2.FloodFill(baseMat,baseMat, new Point (0,0), new Scalar (0,0,0));
+                    // Cv2.Resize(baseMat,baseMat, new OpenCvSharp.Size(width, height));
+                    // Cv2.Resize(baseMat,baseMat, new OpenCvSharp.Size(baseMat.Size().Width+2, baseMat.Size().Height+2));
+                    // Cv2.Resize(baseMat,baseMat, new OpenCvSharp.Size(width+2, height+2));
+
+
+                    UnityEngine.Debug.Log("Resized BASE ROWS---->:"+baseMat.Rows);
+                    UnityEngine.Debug.Log("Resized BASE COLS--->:"+baseMat.Cols);
+
+                    Cv2.FloodFill(baseMat,mask, new Point (0,0), new Scalar (0,0,0));
+
+                    floodFillTexture = OpenCvSharp.Unity.MatToTexture(baseMat, floodFillTexture);
+
                     #endregion
 
                     #region rgb texture
@@ -117,12 +160,14 @@ namespace InvisibleHuman.CaptureFunction
                     rgbViewTexture = OpenCvSharp.Unity.MatToTexture(rgbMat, rgbViewTexture);
                     #endregion
 
+
                     #region inpaint
                     Cv2.Inpaint(rgbMat, stencilMat, inpaintMat, 3, InpaintMethod.NS);
                     inpaintViewTexture = OpenCvSharp.Unity.MatToTexture(inpaintMat, inpaintViewTexture);
                     #endregion
 
                     stencilMat.Dispose();
+                    baseMat.Dispose();
                     rgbMat.Dispose();
                     inpaintMat.Dispose();
                 }

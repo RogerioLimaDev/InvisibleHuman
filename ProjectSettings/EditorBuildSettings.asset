@@ -5,9 +5,12 @@ EditorBuildSettings:
   m_ObjectHideFlags: 0
   serializedVersion: 2
   m_Scenes:
+  - enabled: 0
+    path: 
+    guid: 00000000000000000000000000000000
   - enabled: 1
-    path: Assets/Scene/SampleScene.unity
-    guid: 309c3d345f76f4847a8470d8b8bcaa0e
+    path: Assets/InvisibleHuman/Scenes/InvisibleHuman.unity
+    guid: 3dd35e8a2ee5d4b1381a343287080edc
   m_configObjects:
     UnityEditor.XR.ARCore.ARCoreSettings: {fileID: 11400000, guid: f8ce26fe3bc69499b9be4b2378e97a94,
       type: 2}
